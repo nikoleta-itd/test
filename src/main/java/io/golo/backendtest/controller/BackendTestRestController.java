@@ -26,23 +26,23 @@ import io.golo.backendtest.service.TemplateService;
 public class BackendTestRestController {
     private static final Logger LOGGER = LoggerFactory.getLogger(BackendTestRestController.class);
 
-    private TemplateService templateService;
+    //private TemplateService templateService;
     private MonitoringService monitoringService;
     private ScheduledExecutorService ses;
     private ScheduledFuture<?> scheduledFuture;
 
     @Autowired
     public BackendTestRestController(TemplateService templateService) {
-        this.setTemplateService(templateService);
+        //this.setTemplateService(templateService);
     }
 
-    public TemplateService getTemplateService() {
-		return templateService;
-	}
-
-	public void setTemplateService(TemplateService templateService) {
-		this.templateService = templateService;
-	}
+//    public TemplateService getTemplateService() {
+//		return templateService;
+//	}
+//
+//	public void setTemplateService(TemplateService templateService) {
+//		this.templateService = templateService;
+//	}
 	
 	public MonitoringService getMonitoringService() {
 		return monitoringService;
