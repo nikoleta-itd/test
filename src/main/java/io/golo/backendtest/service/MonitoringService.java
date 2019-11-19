@@ -27,17 +27,25 @@ public class MonitoringService implements Runnable{
 		this.statistics = statistics;
 	}
 
-
+	public String getUrl() {
+		return url;
+	}
 
 	@Override
 	public void run() {
+		 MonitoringStatistic singleStatistic;
+		 try {
 		RestTemplate restTemplate = new RestTemplate();
 			  MonitoringData monitoringData =
 		  restTemplate.getForObject(this.url, MonitoringData.class);
-			  
-		  MonitoringStatistic singleStatistic = 
+		   singleStatistic = 
 				  new MonitoringStatistic(Instant.now(), monitoringData.getStatus());
 		  System.out.println("single stat: " + singleStatistic.toString()); 
+		  } catch (Exception e) {
+			System.out.println("not status in body");
+			 singleStatistic = 
+					  new MonitoringStatistic(Instant.now(), "DOWN");
+		}
 		  
 		  this.statistics.add(singleStatistic); 
 	}

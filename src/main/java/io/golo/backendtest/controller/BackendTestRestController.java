@@ -1,17 +1,23 @@
 package io.golo.backendtest.controller;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import javax.validation.constraints.Min;
+
+import org.hibernate.validator.constraints.URL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,13 +29,15 @@ import io.golo.backendtest.service.TemplateService;
  * Rest controller exposing all API endpoints
  */
 @RestController
+@Validated
 public class BackendTestRestController {
     private static final Logger LOGGER = LoggerFactory.getLogger(BackendTestRestController.class);
 
     //private TemplateService templateService;
     private MonitoringService monitoringService;
     private ScheduledExecutorService ses;
-    private ScheduledFuture<?> scheduledFuture;
+    //private HashMap<String , MonitoringService> services = new HashMap<String, MonitoringService>();
+    //private ScheduledFuture<?> scheduledFuture;
 
     @Autowired
     public BackendTestRestController(TemplateService templateService) {
@@ -51,6 +59,16 @@ public class BackendTestRestController {
 	public void setMonitoringService(MonitoringService monitoringService) {
 		this.monitoringService = monitoringService;
 	}
+	
+	
+//
+//	public HashMap<String, MonitoringService> getServices() {
+//		return services;
+//	}
+//
+//	public void setServices(HashMap<String, MonitoringService> services) {
+//		this.services = services;
+//	}
 
 	/**
      * Starts monitoring service
@@ -60,16 +78,18 @@ public class BackendTestRestController {
      *
      * @return The response containing the data to retrieve.
      */
-    @GetMapping(value = "/monitor-start")
+    @PostMapping(value = "/monitor-start")
     public ResponseEntity<LinkedList<MonitoringStatistic>> startMonitoring(
-    		@RequestParam(name = "url", required = true) String url,
-    		@RequestParam(name = "interval", required = true) int interval) {
-        LOGGER.trace("START monitoring on url: {} with interval in seconds: {}", url, interval );
+    		@URL @RequestParam(name = "url", required = true) String url,
+    		@Min(1) @RequestParam(name = "interval", required = true) int interval) {
+        LOGGER.trace("Request to START monitoring on url: {} with interval in seconds: {}", url, interval );
         
+        if (monitoringService == null) {
         this.monitoringService = new MonitoringService(url);
-    	this.ses = Executors.newScheduledThreadPool(1);
-    	this.scheduledFuture = ses.scheduleAtFixedRate(monitoringService, 0, interval, TimeUnit.SECONDS );
-    	
+        this.ses = Executors.newScheduledThreadPool(1);
+    	//this.scheduledFuture = 
+    			ses.scheduleAtFixedRate(monitoringService, 0, interval, TimeUnit.SECONDS );
+        }
         return new ResponseEntity<>(HttpStatus.OK);
     }
     
@@ -78,12 +98,16 @@ public class BackendTestRestController {
      *
      * @return The response containing the data to retrieve.
      */
-    //TODO add a multiple-monitor and adapt
+
     @GetMapping(value = "/monitor")
     public ResponseEntity<LinkedList<MonitoringStatistic>> getCurrentData() {
         LOGGER.trace("GET monitoring data");
 
-        LinkedList<MonitoringStatistic> statistic = monitoringService.getStatistics();
+        LinkedList<MonitoringStatistic> statistic = new LinkedList<MonitoringStatistic>();
+        
+        if (this.monitoringService != null) {
+        statistic = monitoringService.getStatistics();
+        }
     	
         return new ResponseEntity<>(statistic, HttpStatus.OK);
     }
@@ -95,15 +119,17 @@ public class BackendTestRestController {
      *
      * @return The response containing the data to retrieve.
      */
-    @GetMapping(value = "/monitor-stop")
+    @PostMapping(value = "/monitor-stop")
     public ResponseEntity<LinkedList<MonitoringStatistic>> stopMonitoring(
-    		@RequestParam(name = "url", required = true) String url) {
-        LOGGER.trace("STOP monitoring for url: {}", url );
-        
-    	this.scheduledFuture.cancel(true);
-    	this.ses.shutdownNow();
-    	this.monitoringService.setStatistics(new LinkedList<MonitoringStatistic>());
-    	
+    		@URL @RequestParam(name = "url", required = true) String url) {
+        LOGGER.trace("Request to STOP monitoring for url: {}", url );
+		if (this.monitoringService != null && url.equals(this.monitoringService.getUrl())) {
+		    	//this.scheduledFuture.cancel(true);
+		    if ( ! this.ses.isShutdown()) {
+		    	this.ses.shutdownNow();
+		    	this.monitoringService = null;
+	        }
+        }
         return new ResponseEntity<>(HttpStatus.OK);
     }
 }
