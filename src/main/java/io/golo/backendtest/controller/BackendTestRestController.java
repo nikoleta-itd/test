@@ -6,6 +6,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import javax.validation.constraints.Min;
+import javax.validation.constraints.NotNull;
 
 import org.hibernate.validator.constraints.URL;
 import org.slf4j.Logger;
@@ -19,9 +20,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.golo.backendtest.model.MonitoringApiMessage;
 import io.golo.backendtest.model.MonitoringStatistic;
 import io.golo.backendtest.service.MonitoringService;
-import io.golo.backendtest.service.TemplateService;
 
 /**
  * Rest controller exposing all API endpoints
@@ -55,23 +56,22 @@ public class BackendTestRestController {
 	 * @return The response containing the data to retrieve.
 	 */
 	@PostMapping(value = "/monitor-start")
-	public ResponseEntity<String> startMonitoring(
-			@URL @RequestParam(name = "url", required = true) String url,
-			@Min(1) @RequestParam(name = "interval", required = true) int interval) {
+	public ResponseEntity<MonitoringApiMessage> startMonitoring(
+			@NotNull @URL @RequestParam(name = "url", required = true) String url,
+			@NotNull @Min(1) @RequestParam(name = "interval", required = true) int interval) {
 		
 		LOGGER.trace("Request to START monitoring on url: {} with interval in seconds: {}", url, interval);
-		String result = "";
-		
-		if (monitoringService == null) {
-			this.monitoringService = new MonitoringService(url);
-			this.ses = Executors.newScheduledThreadPool(1);
-			ses.scheduleAtFixedRate(monitoringService, 0, interval, TimeUnit.SECONDS);
-			result = "Monitoring service started on " + url;
-		} else {
-			result = "Monitoring is already active for " + url;
+
+		if (monitoringService != null) {
+			throw new IllegalStateException("Monitoring is already active for " + monitoringService.getUrl());
 		}
 		
-		return new ResponseEntity<>(result, HttpStatus.OK);
+		this.monitoringService = new MonitoringService(url);
+		this.ses = Executors.newScheduledThreadPool(1);
+		ses.scheduleAtFixedRate(monitoringService, 0, interval, TimeUnit.SECONDS);
+		MonitoringApiMessage message = new MonitoringApiMessage("Monitoring service started on " + url);
+
+		return new ResponseEntity<>(message, HttpStatus.ACCEPTED);
 	}
 
 	/**
@@ -85,11 +85,11 @@ public class BackendTestRestController {
 		
 		LOGGER.trace("GET monitoring data");
 
-		LinkedList<MonitoringStatistic> statistic = new LinkedList<MonitoringStatistic>();
-
-		if (this.monitoringService != null) {
-			statistic = monitoringService.getStatistics();
+		if (monitoringService == null) {
+			throw new IllegalStateException("No active monitoring");
 		}
+		
+		LinkedList<MonitoringStatistic> statistic = monitoringService.getStatistics();
 
 		return new ResponseEntity<>(statistic, HttpStatus.OK);
 	}
@@ -102,23 +102,27 @@ public class BackendTestRestController {
 	 * @return The response containing the data to retrieve.
 	 */
 	@PostMapping(value = "/monitor-stop")
-	public ResponseEntity<String> stopMonitoring(
-			@URL @RequestParam(name = "url", required = true) String url) {
+	public ResponseEntity<MonitoringApiMessage> stopMonitoring(
+			@NotNull @URL @RequestParam(name = "url", required = true) String url) {
 		
 		LOGGER.trace("Request to STOP monitoring for url: {}", url);
-		String result;
+		MonitoringApiMessage message;
 		
-		if (this.monitoringService != null && url.equals(this.monitoringService.getUrl())) {
-			if (!this.ses.isShutdown()) {
-				this.ses.shutdownNow();
-				this.monitoringService = null;
-				
-			}
-			result = "Monitoring service stopped on " + url;
+		if (isMonitoringServiceActive(url)) {
+			this.ses.shutdownNow();
+			this.monitoringService = null;
+			message = new MonitoringApiMessage("Monitoring service stopped on " + url);
 		} else {
-			result = "There is no acive monitoring for " + url;
+			throw new IllegalStateException("There is no acive monitoring for " + url);
 		}
 
-		return new ResponseEntity<>(result, HttpStatus.OK);
+		return new ResponseEntity<>(message, HttpStatus.ACCEPTED);
+	}
+	
+	private boolean isMonitoringServiceActive(String url) {
+		return 
+				this.monitoringService != null 
+				&& url.equals(this.monitoringService.getUrl())
+				&& !this.ses.isShutdown();
 	}
 }
